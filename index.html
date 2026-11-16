@@ -6,45 +6,83 @@
 <title>SKY TRACKER — Live Aircraft Radar</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0a0f0a; font-family: monospace; overflow: hidden; touch-action: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: monospace; touch-action: none; -webkit-user-select: none; user-select: none; }
   canvas { display: block; }
-  #status {
-    position: fixed; top: 15px; left: 15px; color: #5a9a6a; font-size: 12px;
-    z-index: 10; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 4px;
-    border: 1px solid #2a4a3a;
+
+  /* ── Top banner: name + contact, very visible ── */
+  #brandBar {
+    position: fixed; top: 0; left: 0; width: 100%; z-index: 20;
+    background: linear-gradient(180deg, rgba(0,30,15,0.95) 0%, rgba(0,15,8,0.85) 100%);
+    border-bottom: 2px solid #3aff7a;
+    padding: 10px 14px 8px 14px;
+    text-align: center;
+    box-shadow: 0 0 18px rgba(58,255,122,0.35);
   }
-  #status .count { color: #aaffaa; font-size: 20px; font-weight: bold; }
+  #brandBar .name {
+    font-size: clamp(15px, 3.8vw, 22px);
+    font-weight: bold; color: #c8ffd8; letter-spacing: 1.5px;
+    text-shadow: 0 0 10px #3aff7a, 0 0 22px rgba(58,255,122,0.5);
+  }
+  #brandBar .role {
+    font-size: clamp(10px, 2.4vw, 13px); color: #7affa8; letter-spacing: 3px;
+    margin-top: 2px;
+  }
+  #brandBar .contact {
+    font-size: clamp(10px, 2.3vw, 13px); color: #8affb8; margin-top: 4px; line-height: 1.5;
+  }
+  #brandBar .contact span { color: #eaffef; }
+
+  /* ── Status bar (top-left under banner) ── */
+  #status {
+    position: fixed; top: 108px; left: 12px; color: #7affa8; font-size: 12px;
+    z-index: 15; background: rgba(0,20,10,0.75); padding: 7px 12px; border-radius: 6px;
+    border: 1px solid #2aff6a; box-shadow: 0 0 10px rgba(42,255,106,0.25);
+  }
+  #status .count { color: #eaffef; font-size: 20px; font-weight: bold; text-shadow: 0 0 8px #3aff7a; }
+  #status .scanning { color: #7affa8; font-size: 11px; }
+  #status .scanning .dot { animation: blink 1s infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+  /* ── Info panel ── */
+  #infoPanel {
+    position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,25,12,0.95); border: 1px solid #3aff7a; border-radius: 8px;
+    padding: 12px 16px; color: #c8ffd8; font-size: 12px; line-height: 1.6;
+    display: none; z-index: 10; min-width: 260px;
+    box-shadow: 0 0 18px rgba(58,255,122,0.4);
+  }
+  #infoPanel .label { color: #7affa8; }
+
+  /* ── Buttons ── */
   #controls {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    z-index: 10; display: flex; gap: 10px;
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    z-index: 15; display: flex; gap: 10px;
   }
   button {
-    background: #0d1a12; border: 2px solid #3a6a4a; color: #aaffaa;
-    padding: 12px 20px; font-family: monospace; font-size: 14px; font-weight: bold;
-    border-radius: 6px; cursor: pointer; pointer-events: auto;
+    background: #052a12; border: 2px solid #3aff7a; color: #c8ffd8;
+    padding: 11px 20px; font-family: monospace; font-size: 13px; font-weight: bold;
+    border-radius: 6px; cursor: pointer; pointer-events: auto; letter-spacing: 1px;
+    box-shadow: 0 0 10px rgba(58,255,122,0.3); transition: background 0.15s, box-shadow 0.15s;
   }
-  button:active { background: #1a2e1e; border-color: #5aff7a; }
+  button:active { background: #0a4a20; box-shadow: 0 0 20px rgba(58,255,122,0.8); }
   button:disabled { opacity: 0.4; }
-  #infoPanel {
-    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-    background: rgba(0,20,10,0.9); border: 1px solid #3a6a4a; border-radius: 8px;
-    padding: 12px 16px; color: #aaffaa; font-size: 12px; line-height: 1.6;
-    display: none; z-index: 10; min-width: 260px;
-  }
-  #infoPanel .label { color: #5a9a6a; }
-  #error {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    color: #ff6644; font-size: 14px; text-align: center; padding: 20px;
-    background: rgba(20,0,0,0.8); border-radius: 8px; display: none; z-index: 20;
-  }
 </style>
 </head>
 <body>
+
+<!-- Name / contact banner -->
+<div id="brandBar">
+  <div class="name">GESNER DESLANDES</div>
+  <div class="role">SOFTWARE DEVELOPER</div>
+  <div class="contact">Contact: <span>(509) 47385663</span> &nbsp;·&nbsp; Email: <span>deslandes78@gmail.com</span></div>
+</div>
+
 <canvas id="radar"></canvas>
 
 <div id="status">
-  <div class="count" id="aircraftCount">—</div>
-  <div id="statusText">Locating you...</div>
+  <div class="count" id="aircraftCount">0</div>
+  <div class="scanning"><span class="dot">●</span> SCANNING <span id="statusText">locating you…</span></div>
 </div>
 
 <div id="infoPanel">
@@ -57,11 +95,9 @@
 </div>
 
 <div id="controls">
-  <button id="refreshBtn" onclick="refreshData()">Refresh</button>
-  <button id="reportBtn" onclick="downloadReport()">Download Report</button>
+  <button id="refreshBtn" onclick="refreshData()">REFRESH</button>
+  <button id="reportBtn" onclick="downloadReport()">DOWNLOAD REPORT</button>
 </div>
-
-<div id="error"></div>
 
 <script>
 const canvas = document.getElementById('radar');
@@ -73,6 +109,7 @@ let userLat = null, userLon = null;
 let lastUpdate = null;
 let sweepAngle = 0;
 let selected = null;
+let fetchInFlight = false;
 
 function resize() {
   W = canvas.width = window.innerWidth;
@@ -83,70 +120,126 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// Get user location
+/* ─────────────────────────────────────────────
+   AUDIO — soft radar "ping" on each scan
+   ───────────────────────────────────────────── */
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+// unlock audio on first user interaction (required by mobile browsers)
+window.addEventListener('touchstart', initAudio, { once: true });
+window.addEventListener('click', initAudio, { once: true });
+
+function playPing() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  // soft sine "ping"
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(880, t);
+  osc.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.05, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + 0.36);
+}
+// radar sweep "searching" hum + periodic ping
+let searchLoop = null;
+function startSearchingSound() {
+  if (!audioCtx || searchLoop) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = 60;
+  g.gain.value = 0.008;
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start();
+  // pulse the hum volume to feel like a sweep
+  const lfo = audioCtx.createOscillator();
+  const lfoGain = audioCtx.createGain();
+  lfo.frequency.value = 0.5;
+  lfoGain.gain.value = 0.006;
+  lfo.connect(lfoGain); lfoGain.connect(g.gain);
+  lfo.start();
+  searchLoop = { osc, lfo, g };
+}
+function stopSearchingSound() {
+  if (!searchLoop) return;
+  try { searchLoop.osc.stop(); searchLoop.lfo.stop(); } catch(e) {}
+  searchLoop = null;
+}
+
+/* ─────────────────────────────────────────────
+   GEOLOCATION
+   ───────────────────────────────────────────── */
 function getUserLocation() {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation not supported'));
-      return;
-    }
+    if (!navigator.geolocation) { reject(new Error('no geo')); return; }
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        userLat = pos.coords.latitude;
-        userLon = pos.coords.longitude;
-        document.getElementById('statusText').textContent = 'Scanning for aircraft...';
-        resolve();
-      },
-      err => reject(new Error('Location denied: ' + err.message)),
-      { enableHighAccuracy: true, timeout: 10000 }
+      pos => { userLat = pos.coords.latitude; userLon = pos.coords.longitude; resolve(); },
+      err => reject(err),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
     );
   });
 }
 
-// Fetch from adsb.lol
+/* ─────────────────────────────────────────────
+   FETCH — silent retry, never shows failure
+   ───────────────────────────────────────────── */
 async function fetchAircraft() {
-  if (userLat === null) return;
+  if (userLat === null || fetchInFlight) return;
+  fetchInFlight = true;
   const url = `https://api.adsb.lol/v2/lat/${userLat}/lon/${userLon}/dist/${rangeNM}`;
   try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('API error: ' + resp.status);
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('api');
     const data = await resp.json();
     const list = data.ac || [];
-    aircraft = list.filter(a => a.lat !== undefined && a.lon !== undefined).map(a => {
-      const dist = haversine(userLat, userLon, a.lat, a.lon);
-      const bearing = calculateBearing(userLat, userLon, a.lat, a.lon);
-      return {
-        hex: a.hex || '—',
-        flight: (a.flight || '—').trim(),
-        alt: a.alt_baro === 'ground' ? 0 : (a.alt_baro || 0),
-        gs: a.gs || 0,
-        track: a.track || 0,
-        lat: a.lat,
-        lon: a.lon,
-        distNM: dist,
-        bearing: bearing,
-        r: a.r || '—',
-        t: a.t || '—'
-      };
-    });
+    aircraft = list
+      .filter(a => a.lat !== undefined && a.lon !== undefined)
+      .map(a => {
+        const dist = haversine(userLat, userLon, a.lat, a.lon);
+        const bearing = calculateBearing(userLat, userLon, a.lat, a.lon);
+        return {
+          hex: a.hex || '—',
+          flight: (a.flight || '—').trim(),
+          alt: a.alt_baro === 'ground' ? 0 : (a.alt_baro || 0),
+          gs: a.gs || 0,
+          track: a.track || 0,
+          lat: a.lat, lon: a.lon,
+          distNM: dist, bearing,
+          r: a.r || '—', t: a.t || '—'
+        };
+      });
     lastUpdate = new Date();
     document.getElementById('aircraftCount').textContent = aircraft.length;
-    document.getElementById('statusText').textContent = 
-      `Updated ${lastUpdate.toLocaleTimeString()} · Range ${rangeNM} NM`;
-    document.getElementById('error').style.display = 'none';
+    document.getElementById('statusText').textContent =
+      `${lastUpdate.toLocaleTimeString()} · ${rangeNM} NM range`;
+    // ping when new aircraft appear
+    if (aircraft.length > 0) playPing();
   } catch (e) {
-    showError('Failed to fetch: ' + e.message);
+    // Silent — never show failure. Just keep scanning.
+    document.getElementById('statusText').textContent = 'searching…';
+  } finally {
+    fetchInFlight = false;
   }
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
-  const R = 3440.065; // Earth radius in NM
+  const R = 3440.065;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-
 function calculateBearing(lat1, lon1, lat2, lon2) {
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
@@ -157,21 +250,23 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
 
 async function refreshData() {
   const btn = document.getElementById('refreshBtn');
-  btn.disabled = true;
-  btn.textContent = 'Fetching...';
+  btn.disabled = true; btn.textContent = 'SCANNING…';
   await fetchAircraft();
-  btn.disabled = false;
-  btn.textContent = 'Refresh';
+  btn.disabled = false; btn.textContent = 'REFRESH';
 }
 
+/* ─────────────────────────────────────────────
+   CSV REPORT
+   ───────────────────────────────────────────── */
 function downloadReport() {
-  if (aircraft.length === 0) { showError('No aircraft data to export'); return; }
+  if (aircraft.length === 0) return;
   const lines = ['Callsign,ICAO,Registration,Type,Altitude(ft),Speed(kt),Heading,Distance(NM),Bearing,Latitude,Longitude,Timestamp'];
   for (const a of aircraft) {
     lines.push([
       a.flight, a.hex, a.r, a.t, a.alt, a.gs, a.track.toFixed(0),
       a.distNM.toFixed(1), a.bearing.toFixed(0),
-      a.lat.toFixed(5), a.lon.toFixed(5), lastUpdate.toISOString()
+      a.lat.toFixed(5), a.lon.toFixed(5),
+      (lastUpdate || new Date()).toISOString()
     ].join(','));
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
@@ -183,69 +278,87 @@ function downloadReport() {
   URL.revokeObjectURL(url);
 }
 
-function showError(msg) {
-  const el = document.getElementById('error');
-  el.textContent = msg;
-  el.style.display = 'block';
-  setTimeout(() => el.style.display = 'none', 5000);
-}
-
-// Radar rendering
+/* ─────────────────────────────────────────────
+   RADAR RENDER — brighter, glowing green
+   ───────────────────────────────────────────── */
 function drawRadar() {
-  ctx.fillStyle = '#0a0f0a';
+  // brighter background gradient
+  const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.75);
+  bg.addColorStop(0, '#0a2a14');
+  bg.addColorStop(0.6, '#051a0c');
+  bg.addColorStop(1, '#000a05');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  const maxR = Math.min(W, H) * 0.42;
+  const maxR = Math.min(W, H) * 0.40;
   const scale = maxR / rangeNM;
 
-  // Range rings
+  // glowing range rings
   for (let i = 1; i <= 5; i++) {
     const r = (rangeNM / 5) * i * scale;
-    ctx.strokeStyle = 'rgba(40, 80, 50, 0.5)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(58, 255, 122, ${0.15 + i * 0.03})`;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#3aff7a';
+    ctx.shadowBlur = 6;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
   }
+  ctx.shadowBlur = 0;
 
-  // Cross lines
-  ctx.strokeStyle = 'rgba(40, 80, 50, 0.3)';
+  // cross lines
+  ctx.strokeStyle = 'rgba(58, 255, 122, 0.18)';
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx - maxR, cy); ctx.lineTo(cx + maxR, cy);
   ctx.moveTo(cx, cy - maxR); ctx.lineTo(cx, cy + maxR);
   ctx.stroke();
 
-  // Labels
-  ctx.fillStyle = '#3a6a4a';
-  ctx.font = '11px monospace';
+  // cardinal labels — bright
+  ctx.fillStyle = '#8affb8';
+  ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
+  ctx.shadowColor = '#3aff7a'; ctx.shadowBlur = 6;
   ctx.fillText('N', cx, cy - maxR - 10);
-  ctx.fillText('S', cx, cy + maxR + 20);
-  ctx.fillText('E', cx + maxR + 15, cy + 4);
-  ctx.fillText('W', cx - maxR - 15, cy + 4);
+  ctx.fillText('S', cx, cy + maxR + 22);
+  ctx.fillText('E', cx + maxR + 16, cy + 5);
+  ctx.fillText('W', cx - maxR - 16, cy + 5);
+  ctx.shadowBlur = 0;
+
+  // range labels
+  ctx.fillStyle = 'rgba(122, 255, 168, 0.7)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
   for (let i = 1; i <= 5; i++) {
     const r = (rangeNM / 5) * i * scale;
-    ctx.fillText((rangeNM/5*i).toFixed(0) + ' NM', cx + 5, cy - r - 5);
+    ctx.fillText((rangeNM/5*i).toFixed(0) + ' NM', cx + 6, cy - r - 4);
   }
 
-  // Sweep
-  sweepAngle += 0.008;
-  const grad = ctx.createConicGradient ? null : null;
+  // sweeping beam — brighter
+  sweepAngle += 0.012;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(sweepAngle);
   const sweepGrad = ctx.createLinearGradient(0, 0, maxR, 0);
-  sweepGrad.addColorStop(0, 'rgba(80, 255, 120, 0.4)');
-  sweepGrad.addColorStop(1, 'rgba(80, 255, 120, 0)');
+  sweepGrad.addColorStop(0, 'rgba(90, 255, 140, 0.55)');
+  sweepGrad.addColorStop(0.7, 'rgba(90, 255, 140, 0.15)');
+  sweepGrad.addColorStop(1, 'rgba(90, 255, 140, 0)');
   ctx.fillStyle = sweepGrad;
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.arc(0, 0, maxR, 0, 0.4);
+  ctx.arc(0, 0, maxR, -0.35, 0.05);
   ctx.closePath();
   ctx.fill();
+  // bright leading edge
+  ctx.strokeStyle = 'rgba(160, 255, 190, 0.9)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(Math.cos(0.05) * maxR, Math.sin(0.05) * maxR);
+  ctx.stroke();
   ctx.restore();
 
-  // Aircraft blips
+  // aircraft blips — bright, glowing
   for (const a of aircraft) {
     const r = a.distNM * scale;
     if (r > maxR) continue;
@@ -254,63 +367,75 @@ function drawRadar() {
     const y = cy + Math.sin(angle) * r;
 
     const isSelected = selected && selected.hex === a.hex;
-    const altColor = a.alt > 30000 ? '#ff66ff' :
-                     a.alt > 20000 ? '#ffaa33' :
-                     a.alt > 10000 ? '#ffff66' : '#66ff66';
+    const altColor = a.alt > 30000 ? '#ff7aff' :
+                     a.alt > 20000 ? '#ffb84a' :
+                     a.alt > 10000 ? '#ffe94a' : '#6aff9a';
+
+    // glow
+    ctx.shadowColor = altColor;
+    ctx.shadowBlur = isSelected ? 18 : 10;
 
     ctx.fillStyle = isSelected ? '#ffffff' : altColor;
     ctx.beginPath();
-    ctx.arc(x, y, isSelected ? 6 : 4, 0, Math.PI * 2);
+    ctx.arc(x, y, isSelected ? 6 : 4.5, 0, Math.PI * 2);
     ctx.fill();
 
     if (isSelected) {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(x, y, 10, 0, Math.PI * 2);
+      ctx.arc(x, y, 11, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Heading arrow
+    // heading arrow
     if (a.gs > 0) {
       const ha = (a.track - 90) * Math.PI / 180;
       ctx.strokeStyle = altColor;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
       ctx.moveTo(x, y);
-      ctx.lineTo(x + Math.cos(ha) * 12, y + Math.sin(ha) * 12);
+      ctx.lineTo(x + Math.cos(ha) * 13, y + Math.sin(ha) * 13);
       ctx.stroke();
     }
+    ctx.shadowBlur = 0;
 
-    // Callsign label (only if close or selected)
+    // callsign label
     if (a.distNM < rangeNM * 0.6 || isSelected) {
-      ctx.fillStyle = '#aaffaa';
-      ctx.font = '10px monospace';
+      ctx.fillStyle = '#d8ffe4';
+      ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText(a.flight, x + 8, y - 4);
+      ctx.shadowColor = '#3aff7a'; ctx.shadowBlur = 4;
+      ctx.fillText(a.flight, x + 9, y - 4);
+      ctx.shadowBlur = 0;
     }
   }
 
-  // Center dot (you)
+  // your location — center dot
+  ctx.shadowColor = '#5aff7a'; ctx.shadowBlur = 16;
   ctx.fillStyle = '#5aff7a';
   ctx.beginPath();
-  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(90, 255, 120, 0.5)';
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(90, 255, 122, 0.6)';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 12, 0, Math.PI * 2);
   ctx.stroke();
 }
 
-// Click/tap to select aircraft
+/* ─────────────────────────────────────────────
+   SELECT AIRCRAFT
+   ───────────────────────────────────────────── */
 function handleClick(e) {
   const rect = canvas.getBoundingClientRect();
   const mx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
   const my = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-  const maxR = Math.min(W, H) * 0.42;
+  const maxR = Math.min(W, H) * 0.40;
   const scale = maxR / rangeNM;
 
-  let closest = null, closestDist = 25;
+  let closest = null, closestDist = 28;
   for (const a of aircraft) {
     const r = a.distNM * scale;
     if (r > maxR) continue;
@@ -338,24 +463,38 @@ function handleClick(e) {
 canvas.addEventListener('click', handleClick);
 canvas.addEventListener('touchstart', e => { e.preventDefault(); handleClick(e); }, { passive: false });
 
-// Main loop
+/* ─────────────────────────────────────────────
+   MAIN LOOP
+   ───────────────────────────────────────────── */
 function loop() {
   drawRadar();
   requestAnimationFrame(loop);
 }
 
-// Init
+/* ─────────────────────────────────────────────
+   INIT
+   ───────────────────────────────────────────── */
 (async function init() {
+  loop(); // start rendering immediately (radar spins while locating)
   try {
     await getUserLocation();
+    document.getElementById('statusText').textContent = 'scanning…';
+    startSearchingSound();
     await fetchAircraft();
-    setInterval(fetchAircraft, 8000); // auto-refresh every 8 seconds
-    loop();
+    setInterval(fetchAircraft, 8000);
   } catch (e) {
-    showError(e.message);
-    document.getElementById('statusText').textContent = 'Error — tap Refresh to retry';
-    document.getElementById('refreshBtn').disabled = false;
-    loop();
+    // No location yet — keep radar spinning, keep trying silently
+    document.getElementById('statusText').textContent = 'awaiting location…';
+    const retry = setInterval(async () => {
+      try {
+        await getUserLocation();
+        clearInterval(retry);
+        document.getElementById('statusText').textContent = 'scanning…';
+        startSearchingSound();
+        await fetchAircraft();
+        setInterval(fetchAircraft, 8000);
+      } catch (err) { /* keep trying silently */ }
+    }, 5000);
   }
 })();
 </script>
