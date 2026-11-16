@@ -10,7 +10,7 @@
   body { font-family: monospace; touch-action: none; -webkit-user-select: none; user-select: none; }
   canvas { display: block; }
 
-  /* ── Top banner: name + contact, very visible ── */
+  /* ── Top banner ── */
   #brandBar {
     position: fixed; top: 0; left: 0; width: 100%; z-index: 20;
     background: linear-gradient(180deg, rgba(0,30,15,0.95) 0%, rgba(0,15,8,0.85) 100%);
@@ -33,7 +33,7 @@
   }
   #brandBar .contact span { color: #eaffef; }
 
-  /* ── Status bar (top-left under banner) ── */
+  /* ── Status ── */
   #status {
     position: fixed; top: 108px; left: 12px; color: #7affa8; font-size: 12px;
     z-index: 15; background: rgba(0,20,10,0.75); padding: 7px 12px; border-radius: 6px;
@@ -43,6 +43,50 @@
   #status .scanning { color: #7affa8; font-size: 11px; }
   #status .scanning .dot { animation: blink 1s infinite; }
   @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+  /* ── "SEARCHING FOR" panel ── */
+  #searchingFor {
+    position: fixed; top: 108px; right: 12px; z-index: 15;
+    background: rgba(0,25,12,0.85);
+    border: 1px solid #3aff7a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #c8ffd8;
+    font-size: 11px;
+    line-height: 1.7;
+    box-shadow: 0 0 14px rgba(58,255,122,0.35);
+    max-width: 62vw;
+    pointer-events: none;
+  }
+  #searchingFor .title {
+    font-size: 12px; font-weight: bold; color: #5aff7a;
+    letter-spacing: 1.5px; margin-bottom: 4px;
+    text-shadow: 0 0 8px #3aff7a;
+  }
+  #searchingFor .item {
+    color: #8affb8;
+  }
+  #searchingFor .item::before {
+    content: '▸ ';
+    color: #3aff7a;
+  }
+
+  /* ── Audio button ── */
+  #audioBtn {
+    position: fixed; top: 200px; right: 12px; z-index: 25;
+    background: #052a12; border: 2px solid #3aff7a; color: #c8ffd8;
+    padding: 8px 14px; font-family: monospace; font-size: 11px; font-weight: bold;
+    border-radius: 6px; cursor: pointer; letter-spacing: 1px;
+    box-shadow: 0 0 12px rgba(58,255,122,0.5);
+    animation: pulseAudio 1.6s infinite;
+  }
+  #audioBtn.active {
+    animation: none; background: #0a3a1a; border-color: #5aff7a;
+  }
+  @keyframes pulseAudio {
+    0%,100% { box-shadow: 0 0 8px rgba(58,255,122,0.4); }
+    50% { box-shadow: 0 0 22px rgba(58,255,122,0.9); }
+  }
 
   /* ── Info panel ── */
   #infoPanel {
@@ -85,6 +129,19 @@
   <div class="scanning"><span class="dot">●</span> SCANNING <span id="statusText">locating you…</span></div>
 </div>
 
+<!-- What the app is searching for -->
+<div id="searchingFor">
+  <div class="title">SEARCHING OPEN SKY FOR</div>
+  <div class="item">Commercial airliners</div>
+  <div class="item">Private / business jets</div>
+  <div class="item">Cargo &amp; military aircraft</div>
+  <div class="item">Helicopters</div>
+  <div class="item">UAVs / drones (ADS-B equipped)</div>
+  <div class="item">High &amp; low altitude traffic</div>
+</div>
+
+<button id="audioBtn" onclick="enableAudio()">🔊 TAP FOR AUDIO</button>
+
 <div id="infoPanel">
   <div><span class="label">Callsign:</span> <span id="iCallsign">—</span></div>
   <div><span class="label">Altitude:</span> <span id="iAlt">—</span></div>
@@ -110,6 +167,7 @@ let lastUpdate = null;
 let sweepAngle = 0;
 let selected = null;
 let fetchInFlight = false;
+let pingTimer = null;
 
 function resize() {
   W = canvas.width = window.innerWidth;
@@ -121,59 +179,80 @@ window.addEventListener('resize', resize);
 resize();
 
 /* ─────────────────────────────────────────────
-   AUDIO — soft radar "ping" on each scan
+   AUDIO
    ───────────────────────────────────────────── */
 let audioCtx = null;
-function initAudio() {
-  if (!audioCtx) {
-    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
-  }
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-}
-// unlock audio on first user interaction (required by mobile browsers)
-window.addEventListener('touchstart', initAudio, { once: true });
-window.addEventListener('click', initAudio, { once: true });
+let audioReady = false;
+let searchNodes = null;
 
-function playPing() {
-  if (!audioCtx) return;
-  const t = audioCtx.currentTime;
-  // soft sine "ping"
-  const osc = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(880, t);
-  osc.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.05, t + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
-  osc.connect(g); g.connect(audioCtx.destination);
-  osc.start(t); osc.stop(t + 0.36);
+function enableAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { return; }
+  }
+  const start = () => {
+    if (audioReady) return;
+    audioReady = true;
+    const btn = document.getElementById('audioBtn');
+    btn.textContent = '🔊 AUDIO ON';
+    btn.classList.add('active');
+    startSearchingSound();
+    playPing();
+    if (pingTimer) clearInterval(pingTimer);
+    pingTimer = setInterval(playPing, 3000);
+  };
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(start).catch(() => {});
+  } else {
+    start();
+  }
 }
-// radar sweep "searching" hum + periodic ping
-let searchLoop = null;
+
 function startSearchingSound() {
-  if (!audioCtx || searchLoop) return;
+  if (!audioCtx || searchNodes) return;
   const t = audioCtx.currentTime;
   const osc = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
+  const gain = audioCtx.createGain();
   osc.type = 'sine';
   osc.frequency.value = 60;
-  g.gain.value = 0.008;
-  osc.connect(g); g.connect(audioCtx.destination);
-  osc.start();
-  // pulse the hum volume to feel like a sweep
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.02, t + 0.5);
   const lfo = audioCtx.createOscillator();
   const lfoGain = audioCtx.createGain();
-  lfo.frequency.value = 0.5;
-  lfoGain.gain.value = 0.006;
-  lfo.connect(lfoGain); lfoGain.connect(g.gain);
-  lfo.start();
-  searchLoop = { osc, lfo, g };
+  lfo.frequency.value = 0.55;
+  lfoGain.gain.value = 0.012;
+  lfo.connect(lfoGain);
+  lfoGain.connect(gain.gain);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(); lfo.start();
+  searchNodes = { osc, lfo, gain };
 }
-function stopSearchingSound() {
-  if (!searchLoop) return;
-  try { searchLoop.osc.stop(); searchLoop.lfo.stop(); } catch(e) {}
-  searchLoop = null;
+
+function playPing() {
+  if (!audioCtx || !audioReady) return;
+  const t = audioCtx.currentTime;
+  const osc1 = audioCtx.createOscillator();
+  const g1 = audioCtx.createGain();
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(1000, t);
+  osc1.frequency.exponentialRampToValueAtTime(1500, t + 0.06);
+  g1.gain.setValueAtTime(0.0001, t);
+  g1.gain.exponentialRampToValueAtTime(0.08, t + 0.015);
+  g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+  osc1.connect(g1); g1.connect(audioCtx.destination);
+  osc1.start(t); osc1.stop(t + 0.42);
+
+  const osc2 = audioCtx.createOscillator();
+  const g2 = audioCtx.createGain();
+  osc2.type = 'sine';
+  osc2.frequency.setValueAtTime(500, t + 0.02);
+  osc2.frequency.exponentialRampToValueAtTime(750, t + 0.08);
+  g2.gain.setValueAtTime(0.0001, t);
+  g2.gain.exponentialRampToValueAtTime(0.045, t + 0.03);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  osc2.connect(g2); g2.connect(audioCtx.destination);
+  osc2.start(t + 0.02); osc2.stop(t + 0.52);
 }
 
 /* ─────────────────────────────────────────────
@@ -191,7 +270,7 @@ function getUserLocation() {
 }
 
 /* ─────────────────────────────────────────────
-   FETCH — silent retry, never shows failure
+   FETCH
    ───────────────────────────────────────────── */
 async function fetchAircraft() {
   if (userLat === null || fetchInFlight) return;
@@ -222,10 +301,8 @@ async function fetchAircraft() {
     document.getElementById('aircraftCount').textContent = aircraft.length;
     document.getElementById('statusText').textContent =
       `${lastUpdate.toLocaleTimeString()} · ${rangeNM} NM range`;
-    // ping when new aircraft appear
-    if (aircraft.length > 0) playPing();
+    if (aircraft.length > 0 && audioReady) playPing();
   } catch (e) {
-    // Silent — never show failure. Just keep scanning.
     document.getElementById('statusText').textContent = 'searching…';
   } finally {
     fetchInFlight = false;
@@ -279,10 +356,9 @@ function downloadReport() {
 }
 
 /* ─────────────────────────────────────────────
-   RADAR RENDER — brighter, glowing green
+   RADAR RENDER
    ───────────────────────────────────────────── */
 function drawRadar() {
-  // brighter background gradient
   const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.75);
   bg.addColorStop(0, '#0a2a14');
   bg.addColorStop(0.6, '#051a0c');
@@ -293,7 +369,6 @@ function drawRadar() {
   const maxR = Math.min(W, H) * 0.40;
   const scale = maxR / rangeNM;
 
-  // glowing range rings
   for (let i = 1; i <= 5; i++) {
     const r = (rangeNM / 5) * i * scale;
     ctx.strokeStyle = `rgba(58, 255, 122, ${0.15 + i * 0.03})`;
@@ -306,7 +381,6 @@ function drawRadar() {
   }
   ctx.shadowBlur = 0;
 
-  // cross lines
   ctx.strokeStyle = 'rgba(58, 255, 122, 0.18)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -314,7 +388,6 @@ function drawRadar() {
   ctx.moveTo(cx, cy - maxR); ctx.lineTo(cx, cy + maxR);
   ctx.stroke();
 
-  // cardinal labels — bright
   ctx.fillStyle = '#8affb8';
   ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
@@ -325,7 +398,6 @@ function drawRadar() {
   ctx.fillText('W', cx - maxR - 16, cy + 5);
   ctx.shadowBlur = 0;
 
-  // range labels
   ctx.fillStyle = 'rgba(122, 255, 168, 0.7)';
   ctx.font = '10px monospace';
   ctx.textAlign = 'left';
@@ -334,7 +406,6 @@ function drawRadar() {
     ctx.fillText((rangeNM/5*i).toFixed(0) + ' NM', cx + 6, cy - r - 4);
   }
 
-  // sweeping beam — brighter
   sweepAngle += 0.012;
   ctx.save();
   ctx.translate(cx, cy);
@@ -349,7 +420,6 @@ function drawRadar() {
   ctx.arc(0, 0, maxR, -0.35, 0.05);
   ctx.closePath();
   ctx.fill();
-  // bright leading edge
   ctx.strokeStyle = 'rgba(160, 255, 190, 0.9)';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -358,7 +428,6 @@ function drawRadar() {
   ctx.stroke();
   ctx.restore();
 
-  // aircraft blips — bright, glowing
   for (const a of aircraft) {
     const r = a.distNM * scale;
     if (r > maxR) continue;
@@ -371,7 +440,6 @@ function drawRadar() {
                      a.alt > 20000 ? '#ffb84a' :
                      a.alt > 10000 ? '#ffe94a' : '#6aff9a';
 
-    // glow
     ctx.shadowColor = altColor;
     ctx.shadowBlur = isSelected ? 18 : 10;
 
@@ -388,7 +456,6 @@ function drawRadar() {
       ctx.stroke();
     }
 
-    // heading arrow
     if (a.gs > 0) {
       const ha = (a.track - 90) * Math.PI / 180;
       ctx.strokeStyle = altColor;
@@ -400,7 +467,6 @@ function drawRadar() {
     }
     ctx.shadowBlur = 0;
 
-    // callsign label
     if (a.distNM < rangeNM * 0.6 || isSelected) {
       ctx.fillStyle = '#d8ffe4';
       ctx.font = 'bold 10px monospace';
@@ -411,7 +477,6 @@ function drawRadar() {
     }
   }
 
-  // your location — center dot
   ctx.shadowColor = '#5aff7a'; ctx.shadowBlur = 16;
   ctx.fillStyle = '#5aff7a';
   ctx.beginPath();
@@ -475,28 +540,35 @@ function loop() {
    INIT
    ───────────────────────────────────────────── */
 (async function init() {
-  loop(); // start rendering immediately (radar spins while locating)
+  loop();
   try {
     await getUserLocation();
     document.getElementById('statusText').textContent = 'scanning…';
-    startSearchingSound();
     await fetchAircraft();
     setInterval(fetchAircraft, 8000);
   } catch (e) {
-    // No location yet — keep radar spinning, keep trying silently
     document.getElementById('statusText').textContent = 'awaiting location…';
     const retry = setInterval(async () => {
       try {
         await getUserLocation();
         clearInterval(retry);
         document.getElementById('statusText').textContent = 'scanning…';
-        startSearchingSound();
         await fetchAircraft();
         setInterval(fetchAircraft, 8000);
       } catch (err) { /* keep trying silently */ }
     }, 5000);
   }
 })();
+
+/* Extra safety: unlock audio on any tap */
+function globalUnlock() {
+  if (audioReady) return;
+  enableAudio();
+  window.removeEventListener('touchstart', globalUnlock);
+  window.removeEventListener('mousedown', globalUnlock);
+}
+window.addEventListener('touchstart', globalUnlock, { once: true });
+window.addEventListener('mousedown', globalUnlock, { once: true });
 </script>
 </body>
 </html>
